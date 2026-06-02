@@ -530,10 +530,9 @@ with st.sidebar:
             index=2
         )
 
-    needs_queue_waiting = any(
-        x in selected_modalities
-        for x in ["Voice", "Chat"]
-    )
+    # Only Voice requires abandon/patience inputs.
+    # Chat uses concurrency and SLA settings.
+    needs_queue_waiting = "Voice" in selected_modalities
 
     if needs_queue_waiting:
         abandon_pct_target = st.number_input(
