@@ -335,6 +335,10 @@ def required_servers_for_SLA_and_abandon(
 
     return best_c if best_c else start
 
+def workload_staff_required(volume, aht_minutes):
+    workload_hours = (volume * aht_minutes) / 60
+    return workload_hours / 0.5
+
 
 # ---------------------------
 # Helpers
@@ -478,6 +482,12 @@ with st.sidebar:
         "Select Modalities",
         ["Voice","Chat","Email","Backoffice"],
         default=["Voice"]
+    )
+
+    staffing_method = st.selectbox(
+        "Staffing Method",
+        ["Auto", "Erlang", "Workload"],
+        index=0
     )
 
     channel_mix = {}
@@ -692,7 +702,7 @@ st.table(
 # ---------------------------
 # Required staff using both SLA & Abandon target
 # ---------------------------
-st.subheader("Required staff (Erlang-C & Abandon constraint)")
+st.subheader("Required staff")
 
 aht = aht_seconds / 60.0
 abandon_fraction = abandon_pct_target/100.0
@@ -716,16 +726,44 @@ for channel in selected_modalities:
     if channel == "Chat":
         channel_aht = aht / chat_concurrency
 
-    df_week[f"{channel}_required"] = df_week[f"{channel}_volume"].apply(
-        lambda x: required_servers_for_SLA_and_abandon(
-            x,
-            channel_aht,
-            sla_fraction,
-            sla_seconds,
-            abandon_fraction,
-            patience_seconds
+    if staffing_method == "Erlang":
+
+        df_week[f"{channel}_required"] = df_week[f"{channel}_volume"].apply(
+            lambda x: required_servers_for_SLA_and_abandon(
+                x,
+                channel_aht,
+                sla_fraction,
+                sla_seconds,
+                abandon_fraction,
+                patience_seconds
+            )
         )
-    )
+
+    elif staffing_method == "Workload":
+
+        df_week[f"{channel}_required"] = df_week[f"{channel}_volume"].apply(
+            lambda x: math.ceil(workload_staff_required(x, channel_aht))
+        )
+
+    else:
+
+        if channel in ["Voice", "Chat"]:
+
+            df_week[f"{channel}_required"] = df_week[f"{channel}_volume"].apply(
+                lambda x: required_servers_for_SLA_and_abandon(
+                    x,
+                    channel_aht,
+                    sla_fraction,
+                    sla_seconds,
+                    abandon_fraction,
+                    patience_seconds
+                )
+            )
+        else:
+
+            df_week[f"{channel}_required"] = df_week[f"{channel}_volume"].apply(
+                lambda x: math.ceil(workload_staff_required(x, channel_aht))
+            )
 
     df_week["required_raw"] += df_week[f"{channel}_required"]
 
